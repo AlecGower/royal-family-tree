@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "royal_family_tree"
+version = "0.1"
+description = "Tools for a one-off project to create a graph dataset of a royal family tree"
+readme = ""
+requires-python = ">=3.7"
+dependencies = [
+    "rdflib",
+    "pycountry",
+    "tqdm",
+    "python-gedcom @ git+https://github.com/Mark-Wing/python-gedcom.git",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]

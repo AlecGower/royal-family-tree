@@ -20,9 +20,10 @@ RUN chmod +x scripts/install-jena.sh
 # Install Jena/Fuseki
 RUN scripts/install-jena.sh
 
-# Copy requirements and install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Install Python tools in src (pyproject)
+COPY pyproject.toml pyproject.toml
+COPY src/ src/
+RUN pip install .
 
 # Copy scripts and data
 COPY scripts/ scripts/

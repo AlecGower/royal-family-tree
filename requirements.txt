@@ -1,4 +1,0 @@
-rdflib
-git+https://github.com/Mark-Wing/python-gedcom.git
-pycountry
-tqdm
