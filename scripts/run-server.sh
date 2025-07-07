@@ -1,0 +1,1 @@
+cd apache-jena-fuseki-5.4.0 && ./fuseki-server --port=3031 --file=/app/data/royals.ttl /royals

@@ -1,0 +1,9 @@
+services:
+  fuseki:
+    build: .
+    ports:
+      - "3031:3031"
+    container_name: fuseki-server-royals
+    # Optional: run interactively
+    # stdin_open: true
+    # tty: true
