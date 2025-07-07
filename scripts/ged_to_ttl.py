@@ -15,6 +15,7 @@ from urllib.error import HTTPError
 REL = Namespace("http://purl.org/vocab/relationship/")
 ROYALS = Namespace("http://example.org/royals/")
 SCHEMA = Namespace("http://schema.org/")
+GED_FILE_PATH = 'data/Queen_Eliz_II.ged'
 
 
 def find_country_from_pob(pob, verbose=False):
@@ -49,10 +50,16 @@ def find_country_from_pob(pob, verbose=False):
 
 
 class RoyalsGraph(Graph):
-    """A custom graph class for royals."""
+    """A custom graph class for royals loaded from GED dataset."""
 
-    def __init__(self):
+    def __init__(self, ged_file_path):
         super().__init__()
+        self.gedcom_parser = Parser()
+        self.gedcom_parser.parse_file(ged_file_path, strict=False)
+
+        print(
+            f"There are {sum(1 for i in self.gedcom_parser.get_root_child_elements() if isinstance(i, IndividualElement))} Individuals in the file.")
+
         self.bind("rel", REL)
         self.bind("royals", ROYALS)
         self.bind("schema", SCHEMA)
@@ -99,10 +106,8 @@ class RoyalsGraph(Graph):
         id = ind.get_pointer().strip('@')
         uri = ROYALS[id]
 
-        # TODO Insteaed of using gender as a string, create a subclass
-        # structure so there is more of a heirarchy
         self.add((uri, RDF.type, self.gender_lookup.get(
-            element.get_gender(), FOAF.Person)))
+            ind.get_gender(), FOAF.Person)))
 
         givenName = ind.get_name()[0].strip()
         familyName = ind.get_name()[1].strip()
@@ -150,53 +155,44 @@ class RoyalsGraph(Graph):
                 self.countries.append(country_uri)
             return country_uri
 
+    def load_ged_data(self):
+        # Iterate through all root child elements
+        for element in tqdm(self.gedcom_parser.get_root_child_elements()):
+            # Is the `element` an actual `IndividualElement`? (Allows usage of extra functions such as `surname_match` and `get_name`.)
+            if isinstance(element, IndividualElement):
+                element_uri = self.add_individual(element)
+
+                # Get parents of the individual
+                for parent in self.gedcom_parser.get_parents(element):
+                    if isinstance(parent, IndividualElement):
+                        parent_id = parent.get_pointer().strip('@')
+                        parent_uri = ROYALS[parent_id]
+                        self.add((parent_uri, REL.parentOf, URIRef(
+                            element_uri)))
+
+                # Get spouses of the individual
+                for spouse in self.gedcom_parser.get_spouses(element):
+                    if isinstance(spouse, IndividualElement):
+                        spouse_id = spouse.get_pointer().strip('@')
+                        spouse_uri = ROYALS[spouse_id]
+                        self.add((spouse_uri, REL.spouseOf, URIRef(
+                            element_uri)))
+
+                # Get children of the individual
+                for child in self.gedcom_parser.get_children(element):
+                    if isinstance(child, IndividualElement):
+                        child_id = child.get_pointer().strip('@')
+                        child_uri = ROYALS[child_id]
+                        self.add(
+                            (URIRef(element_uri), REL.parentOf, child_uri))
+                        self.add((child_uri, REL.childOf, URIRef(
+                            element_uri)))
+
 
 if __name__ == "__main__":
-
-    file_path = 'data/Queen_Eliz_II.ged'
-
-    gedcom_parser = Parser()
-    gedcom_parser.parse_file(file_path, strict=False)
-
-    elements = gedcom_parser.get_root_child_elements()
-
-    print(
-        f"There are {sum(1 for i in elements if isinstance(i, IndividualElement))} Individuals in the file.")
-
     # Create graph
-    g = RoyalsGraph()
-
-    # Iterate through all root child elements
-    for element in tqdm(elements):
-        # Is the `element` an actual `IndividualElement`? (Allows usage of extra functions such as `surname_match` and `get_name`.)
-        if isinstance(element, IndividualElement):
-            element_uri = g.add_individual(element)
-
-            # Get parents of the individual
-            for parent in gedcom_parser.get_parents(element):
-                if isinstance(parent, IndividualElement):
-                    parent_id = parent.get_pointer().strip('@')
-                    parent_uri = ROYALS[parent_id]
-                    g.add((parent_uri, REL.parentOf, URIRef(
-                        element_uri)))
-
-            # Get spouses of the individual
-            for spouse in gedcom_parser.get_spouses(element):
-                if isinstance(spouse, IndividualElement):
-                    spouse_id = spouse.get_pointer().strip('@')
-                    spouse_uri = ROYALS[spouse_id]
-                    g.add((spouse_uri, REL.spouseOf, URIRef(
-                        element_uri)))
-
-            # Get children of the individual
-            for child in gedcom_parser.get_children(element):
-                if isinstance(child, IndividualElement):
-                    child_id = child.get_pointer().strip('@')
-                    child_uri = ROYALS[child_id]
-                    g.add(
-                        (URIRef(element_uri), REL.parentOf, child_uri))
-                    g.add((child_uri, REL.childOf, URIRef(
-                        element_uri)))
+    g = RoyalsGraph(GED_FILE_PATH)
+    g.load_ged_data()
 
     # Serialize the graph to Turtle format
     g.serialize(destination='data/royals.ttl', format='turtle')
