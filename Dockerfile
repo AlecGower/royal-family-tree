@@ -11,10 +11,6 @@ RUN apt-get update && apt-get install -y \
 # Set workdir
 WORKDIR /app
 
-# Copy requirements and install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
 # Copy jena install script
 COPY scripts/install-jena.sh scripts/install-jena.sh
 
@@ -23,6 +19,10 @@ RUN chmod +x scripts/install-jena.sh
 
 # Install Jena/Fuseki
 RUN scripts/install-jena.sh
+
+# Copy requirements and install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy scripts and data
 COPY scripts/ scripts/
