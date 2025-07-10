@@ -1,14 +1,15 @@
 import sys
 
+from tqdm.auto import tqdm
+from pprint import pprint, pformat
+
+from urllib.error import HTTPError
+
 from gedcom.element.individual import IndividualElement
 from gedcom.parser import Parser
 
 from rdflib import Graph, URIRef, Literal
 from rdflib.namespace import RDF, RDFS, FOAF, XSD
-
-from tqdm.auto import tqdm
-
-from urllib.error import HTTPError
 
 from royal_family_tree.namespaces import REL, ROYALS, SCHEMA
 from royal_family_tree.helpers import find_country_from_pob
@@ -25,22 +26,24 @@ class RoyalsGraph(Graph):
         print(
             f"There are {sum(1 for i in self.gedcom_parser.get_root_child_elements() if isinstance(i, IndividualElement))} Individuals in the file.")
 
-        self.bind("rel", REL)
-        self.bind("royals", ROYALS)
-        self.bind("schema", SCHEMA)
         # self.gender_lookup = {'M': 'male', 'F': 'female'}
         self.gender_lookup = {'M': ROYALS["Man"], 'F': ROYALS["Woman"]}
         self.countries = []
 
         self.parse_ontology_structures({
             'foaf': 'http://xmlns.com/foaf/spec/index.rdf',
-            'schema': 'https://schema.org/version/latest/schemaorg-current-https.ttl',
+            'schema': 'https://schema.org/version/latest/schemaorg-current-https.rdf',
             'rel': 'https://vocab.org/relationship/rel-vocab-20100607.rdf'
         })
+        print(f"Loaded ontologies: {pformat(list(self.namespaces()))}")
 
         self.extend_foaf()
+        L = len(self)
+        self.fix_schema()
+        print(
+            f"Fixed `schema`, now has {len(self)} triples (was {L}).", file=sys.stderr)
 
-    def parse_ontology_structures(self, ontology_urls: dict, verbose=False):
+    def parse_ontology_structures(self, ontology_urls: dict, verbose=True):
 
         for ns in list(self.namespaces()):
             prefix = ns[0]
@@ -49,14 +52,53 @@ class RoyalsGraph(Graph):
                 try:
                     self.parse(url, format='xml' if url.endswith(
                         '.rdf') else 'turtle')
+                    if verbose:
+                        print(
+                            f"SUCCESS: Namespace {ns} successfully loaded.", file=sys.stderr)
                 except HTTPError as e:
                     print(f"{e} : {url}")
                     raise
             else:
                 if verbose:
                     print(
-                        f"Namespace {ns} not found in ontologies.", file=sys.stderr)
+                        f"WARN:    Namespace {ns} not found in ontologies.", file=sys.stderr)
                 continue
+
+    def fix_schema(self):
+        # These uris were causing problems, because they were listed
+        # as both individuals of a class, and as a class.
+        #
+        # Or at least this holds for the medical ones, for the datatypes
+        # I am not so sure.
+        problematic_uris = [
+            "https://schema.org/Boolean",
+            "https://schema.org/CommunityHealth",
+            "https://schema.org/Dermatology",
+            "https://schema.org/DietNutrition",
+            "https://schema.org/Emergency",
+            "https://schema.org/Geriatric",
+            "https://schema.org/Gynecologic",
+            "https://schema.org/Midwifery",
+            "https://schema.org/Number",
+            "https://schema.org/Nursing",
+            "https://schema.org/Obstetric",
+            "https://schema.org/Oncologic",
+            "https://schema.org/Optometric",
+            "https://schema.org/Otolaryngologic",
+            "https://schema.org/Pediatric",
+            "https://schema.org/Physiotherapy",
+            "https://schema.org/PlasticSurgery",
+            "https://schema.org/Podiatric",
+            "https://schema.org/PrimaryCare",
+            "https://schema.org/Psychiatric",
+            "https://schema.org/PublicHealth",
+            "https://schema.org/RespiratoryTherapy",
+            "https://schema.org/Text",
+        ]
+
+        for uri in problematic_uris:
+            self.remove((URIRef(uri), None, None))
+            self.remove((None, None, URIRef(uri)))
 
     def extend_foaf(self):
         self.add((ROYALS["Man"], RDFS.subClassOf, FOAF.Person))
